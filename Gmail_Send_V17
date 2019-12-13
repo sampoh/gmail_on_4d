@@ -1,0 +1,187 @@
+  //< Gmail送信処理 >
+
+  //第1引数 ( 必須 ) : メール件名 【 テキスト型 】
+  //第2引数 ( 必須 ) : メール本文 【 テキスト型 】
+  //第3引数 ( 必須 ) : SMTPアカウント 【 テキスト型 】
+  //第4引数 ( 必須 ) : SMTPパスワード 【 テキスト型 】
+  //第5引数 ( 必須 ) : FROMアドレス 【 テキスト型 】
+  //第6引数 ( 必須 ) : TOアドレステキスト配列へのポインタ 【 ポインタ型 】
+  //第7引数 ( 任意 ) : CCアドレステキスト配列へのポインタ 【 ポインタ型 】
+  //第8引数 ( 任意 ) : BCCアドレステキスト配列へのポインタ 【 ポインタ型 】
+  //戻り値 : エラーコード 【 倍長整数型 】
+
+  //※1 戻り値が 0 正常、 -1 のときは引数不正、それ以外の場合はSMTPコマンドのエラーを参照。
+  //※2 2段階認証を有効にしている場合はアプリパスワードの発行が必須です。
+  //※3 Googleの正規認証を受けていないアプリでは2段階認証は必須です。
+
+C_LONGINT($0;$vlErrCode)
+C_TEXT($1;$subject)
+C_TEXT($2;$message)
+C_TEXT($3;$ACCOUNT)
+C_TEXT($4;$PASSWORD)
+C_TEXT($5;$FROM)
+C_POINTER($6)
+ARRAY TEXT($atTO;0)
+C_POINTER($7)
+ARRAY TEXT($atCC;0)
+C_POINTER($8)
+ARRAY TEXT($atBCC;0)
+
+C_BOOLEAN($execute)
+C_LONGINT($i;$sizeI)
+C_TEXT($TO;$CC;$BCC)
+C_LONGINT($smtp_ID;$PORT)
+C_TEXT($SERVER)
+
+$vlErrCode:=0
+
+$SERVER:="smtp.gmail.com"
+$PORT:=587
+
+$execute:=(Count parameters>=6)
+
+If ($execute)
+	$subject:=$1
+	$message:=$2
+	$ACCOUNT:=$3
+	$PASSWORD:=$4
+	$FROM:=$5
+	$execute:=(\
+	($ACCOUNT#"") & \
+	($PASSWORD#"") & \
+	($FROM#""))
+End if 
+
+If ($execute)
+	$execute:=Not(Is nil pointer($6))
+	If ($execute)
+		$execute:=(Type($6->)=Text array)
+	End if 
+	If ($execute)
+		COPY ARRAY($6->;$atTO)
+	End if 
+End if 
+
+If ($execute)
+	If (Count parameters>=7)
+		If (Not(Is nil pointer($7)))
+			If (Type($7->)=Text array)
+				COPY ARRAY($7->;$atCC)
+			End if 
+		End if 
+	End if 
+End if 
+
+If ($execute)
+	If (Count parameters>=8)
+		If (Not(Is nil pointer($8)))
+			If (Type($8->)=Text array)
+				COPY ARRAY($8->;$atBCC)
+			End if 
+		End if 
+	End if 
+End if 
+
+If ($execute)
+	
+	$sizeI:=Size of array($atTO)
+	For ($i;1;$sizeI)
+		If ($atTO{$i}#"")
+			If ($TO#"")
+				$TO:=$TO+","
+			End if 
+			$TO:=$TO+$atTO{$i}
+		End if 
+	End for 
+	
+	$sizeI:=Size of array($atCC)
+	For ($i;1;$sizeI)
+		If ($atCC{$i}#"")
+			If ($CC#"")
+				$CC:=$CC+","
+			End if 
+			$CC:=$CC+$atCC{$i}
+		End if 
+	End for 
+	
+	$sizeI:=Size of array($atBCC)
+	For ($i;1;$sizeI)
+		If ($atBCC{$i}#"")
+			If ($BCC#"")
+				$BCC:=$BCC+","
+			End if 
+			$BCC:=$BCC+$atBCC{$i}
+		End if 
+	End for 
+	
+	$execute:=($TO#"")
+	
+End if 
+
+If ($execute)
+	
+	If ($vlErrCode=0)
+		$vlErrCode:=IT_SetPort (2;$PORT)
+	End if 
+	
+	If ($vlErrCode=0)
+		$vlErrCode:=SMTP_SetPrefs (-1;15;-1)  //※ 4Dv14以降はデフォルトUTF-8なので必須ではない
+	End if 
+	
+	If ($vlErrCode=0)
+		$vlErrCode:=SMTP_Charset (1;1)  //※ 4Dv14以降はデフォルトUTF-8なので必須ではない
+	End if 
+	
+	If ($vlErrCode=0)
+		$vlErrCode:=SMTP_New ($smtp_ID)
+	End if 
+	
+	If ($vlErrCode=0)
+		$vlErrCode:=SMTP_Host ($smtp_ID;$SERVER)
+	End if 
+	
+	If ($vlErrCode=0)
+		$vlErrCode:=SMTP_From ($smtp_ID;$FROM)
+	End if 
+	
+	If ($vlErrCode=0)
+		$vlErrCode:=SMTP_Subject ($smtp_ID;$subject)
+	End if 
+	
+	If ($vlErrCode=0)
+		$vlErrCode:=SMTP_To ($smtp_ID;$TO;0)
+	End if 
+	
+	If ($vlErrCode=0)
+		If ($CC#"")
+			$vlErrCode:=SMTP_Cc ($smtp_ID;$CC;0)
+		End if 
+	End if 
+	
+	If ($vlErrCode=0)
+		If ($BCC#"")
+			$vlErrCode:=SMTP_Bcc ($smtp_ID;$BCC;0)
+		End if 
+	End if 
+	
+	If ($vlErrCode=0)
+		$vlErrCode:=SMTP_Body ($smtp_ID;$message)
+	End if 
+	
+	If ($vlErrCode=0)
+		$vlErrCode:=SMTP_Auth ($smtp_ID;$ACCOUNT;$PASSWORD;0)
+	End if 
+	
+	If ($vlErrCode=0)
+		$vlErrCode:=SMTP_Send ($smtp_ID;0)
+	End if 
+	
+	If ($vlErrCode=0)
+		$vlErrCode:=SMTP_Clear ($smtp_ID)
+	End if 
+	
+Else 
+	$vlErrCode:=-1
+End if 
+
+$0:=$vlErrCode
